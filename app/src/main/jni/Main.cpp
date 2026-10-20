@@ -298,34 +298,44 @@ static void *delayed_enable_hooks(void *arg) {
 /* ═══════════════════════════════════════════════════════════
    ENTRY
    ═══════════════════════════════════════════════════════════ */
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
-    g_vm = vm;
-    LOGI("[INIT] 🚀 STEALTH + 20s DELAY MODE");
-Check::InitLogging();
-Check::StartWatcher(vm);
-    void *libc = dlopen("libc.so", RTLD_NOW);
-    if (libc) {
-        void *p1 = dlsym(libc, "getaddrinfo");
-        if (p1) {
-            if (DobbyHook(p1, (void*)my_getaddrinfo,
-                          (void**)&orig_getaddrinfo) != 0) {
-                LOGE("[INIT] FAILED to hook getaddrinfo");
-            } else {
-                LOGI("[INIT] getaddrinfo hooked (inactive)");
+static void *lazy_installer(void *) {
+    for (int i = 0; i < 900; ++i) {                 // up to ~180 s
+        FILE *f = fopen("/proc/self/maps", "r");
+        if (f) {
+            char line[512];
+            bool found = false;
+            while (fgets(line, sizeof(line), f)) {
+                if (strstr(line, "libpd267")) { found = true; break; }
+            }
+            fclose(f);
+
+            if (found) {
+                LOGI("[LAZY] libpd267 detected -> installing hooks");
+                void *libc = dlopen("libc.so", RTLD_NOW);
+                if (libc) {
+                    void *p1 = dlsym(libc, "getaddrinfo");
+                    if (p1 && DobbyHook(p1, (void*)my_getaddrinfo,
+                                        (void**)&orig_getaddrinfo) == 0)
+                        LOGI("[LAZY] getaddrinfo hooked");
+                    dlclose(libc);
+                }
+                scan_and_hook();
+                g_hooks_enabled.store(true, std::memory_order_release);
+                LOGI("[LAZY] hooks armed");
+                return nullptr;
             }
         }
-        dlclose(libc);
+        usleep(200 * 1000);
     }
+    LOGI("[LAZY] libpd267 never appeared; no hooks installed");
+    return nullptr;
+}
 
-    scan_and_hook();
-
-    pthread_t watcher_tid;
-    pthread_create(&watcher_tid, nullptr, ssl_watcher, nullptr);
-    pthread_detach(watcher_tid);
-
-    pthread_t delay_tid;
-    pthread_create(&delay_tid, nullptr, delayed_enable_hooks, nullptr);
-    pthread_detach(delay_tid);
-
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
+    g_vm = vm;
+    Check::InitLogging();
+    pthread_t tid;
+    pthread_create(&tid, nullptr, lazy_installer, nullptr);
+    pthread_detach(tid);
     return JNI_VERSION_1_6;
 }
