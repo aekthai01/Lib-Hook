@@ -299,47 +299,47 @@ static void *delayed_enable_hooks(void *arg) {
 /* ═══════════════════════════════════════════════════════════
    ENTRY
    ═══════════════════════════════════════════════════════════ */
-static int phdr_cb(struct dl_phdr_info *info, size_t, void *data) {
-    if (info->dlpi_name && strstr(info->dlpi_name, "libpd267")) {
-        *(bool *)data = true;
-        return 1;
-    }
-    return 0;
-}
-
-static bool menu_lib_present() {
-    bool found = false;
-    dl_iterate_phdr(phdr_cb, &found);
-    return found;
-}
-
-static void *lazy_installer(void *) {
-    for (int i = 0; i < 900; ++i) {                 // ~180 s
-        if (menu_lib_present()) {
-            LOGI("[LAZY] libpd267 detected -> installing hooks");
-            void *libc = dlopen("libc.so", RTLD_NOW);
-            if (libc) {
-                void *p1 = dlsym(libc, "getaddrinfo");
-                if (p1 && DobbyHook(p1, (void*)my_getaddrinfo,
-                                    (void**)&orig_getaddrinfo) == 0)
-                    LOGI("[LAZY] getaddrinfo hooked");
-                dlclose(libc);
-            }
-            scan_and_hook();
-            g_hooks_enabled.store(true, std::memory_order_release);
-            LOGI("[LAZY] hooks armed");
-            return nullptr;
-        }
-        usleep(200 * 1000);
-    }
-    LOGI("[LAZY] libpd267 never appeared; no hooks installed");
-    return nullptr;
+static void write_marker(const char *msg) {
+    FILE *f = fopen("/sdcard/Download/hook_alive.txt", "a");
+    if (!f) f = fopen("/data/local/tmp/hook_alive.txt", "a");
+    if (f) { fprintf(f, "[%d] %s\n", getpid(), msg); fclose(f); }
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_vm = vm;
-    pthread_t tid;
-    pthread_create(&tid, nullptr, lazy_installer, nullptr);
-    pthread_detach(tid);
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "JNI_OnLoad pid=%d", getpid());
+    write_marker(buf);
+
+    // 1) DNS: cry4me.best -> our host, at the moment any request is sent
+    void *libc = dlopen("libc.so", RTLD_NOW);
+    if (libc) {
+        void *p1 = dlsym(libc, "getaddrinfo");
+        if (p1 && DobbyHook(p1, (void*)my_getaddrinfo, (void**)&orig_getaddrinfo) == 0) {
+            LOGI("[INIT] getaddrinfo hooked");
+            write_marker("getaddrinfo hooked");
+        } else {
+            write_marker("getaddrinfo hook FAILED");
+        }
+        dlclose(libc);
+    }
+
+    // 2) SNI (only if a shared libssl exposes it; the menu lib statically links openssl)
+    void *ssl = dlopen("libssl.so", RTLD_NOW);
+    if (ssl) {
+        void *p = dlsym(ssl, "SSL_set_tlsext_host_name");
+        if (p && !orig_SSL_set_tlsext_host_name &&
+            DobbyHook(p, (void*)my_SSL_set_tlsext_host_name, (void**)&orig_SSL_set_tlsext_host_name) == 0) {
+            LOGI("[INIT] SNI hooked");
+            write_marker("SNI hooked");
+        }
+        dlclose(ssl);
+    } else {
+        write_marker("libssl.so not loadable (static openssl in menu lib)");
+    }
+
+    g_hooks_enabled.store(true, std::memory_order_release);
+    write_marker("hooks armed");
     return JNI_VERSION_1_6;
 }
