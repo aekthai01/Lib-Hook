@@ -1,0 +1,23 @@
+URL Failover revision
+=====================
+
+สิ่งที่เปลี่ยน
+- ลบกลไกค้นหา 0x2712, CSEL, anchor scan, storage scan และ DobbyInstrument ออกจากโค้ดที่ใช้งาน
+- แยก URL และ allowlist ไปไว้ใน app/src/main/jni/UrlConfig.cpp
+- เปลี่ยน URL เฉพาะเมื่อ path ลงท้ายด้วย:
+  /connect
+  /api/games/mobile-legends
+  /api/game/MLBB
+- URL หลัก: https://zxx.spwz.online/connect
+- URL สำรอง: https://zxx.alwaysdata.net/connect
+- hook curl_easy_setopt เพื่อ route URL ก่อนเริ่ม TLS
+- hook curl_easy_perform เพื่อ retry URL สำรองหนึ่งครั้งเมื่อเจอปัญหาเชื่อมต่อ/TLS/timeout หรือ HTTP 502, 503, 504
+- hook curl_easy_cleanup และ curl_easy_reset เพื่อล้างสถานะของ CURL handle
+
+ไฟล์ที่แก้ URL ได้ง่าย
+- app/src/main/jni/UrlConfig.cpp
+
+หมายเหตุทางเทคนิค
+- ไม่ hook SSL_write/SSL_connect แบบกว้าง เพราะ TLS layer ไม่มี URL path ให้ตรวจ allowlist และการเปลี่ยนปลายทางหลังสร้าง socket/TLS แล้วจะผิดลำดับ
+- การ route ที่ CURLOPT_URL ทำให้ curl เปิด DNS/TCP/TLS/SNI ไปยัง host ที่เลือกอย่างถูกต้องก่อนส่ง request
+- รองรับ curl easy interface; URL ของ easy handle ที่ถูกใช้ร่วมกับ curl multi จะถูก route ตั้งแต่ CURLOPT_URL แต่ระบบ retry อัตโนมัติอยู่ที่ curl_easy_perform
