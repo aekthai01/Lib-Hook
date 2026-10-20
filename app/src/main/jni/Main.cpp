@@ -141,7 +141,7 @@ static int my_getaddrinfo(const char *node, const char *service,
     if (!node || is_numeric_ip(node))
         return orig_getaddrinfo(node, service, hints, res);
 
-    if (!strstr(node, "cry4me.best"))
+    if (!strstr(node, "cry4me"))
         return orig_getaddrinfo(node, service, hints, res);
 
     LOGI("[DNS] 🎯 Hijacking %s -> %s", node, TARGET_HOST);
@@ -156,7 +156,7 @@ static int my_SSL_set_tlsext_host_name(void *ssl, const char *name) {
         return orig_SSL_set_tlsext_host_name(ssl, name);
 
     bool should_hijack = false;
-    if (strstr(name, "cry4me.best")) {
+    if (strstr(name, "cry4me")) {
         should_hijack = true;
     }
 
