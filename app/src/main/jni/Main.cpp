@@ -176,7 +176,7 @@ static int is_http_method(const char *b, int n) {
     return 0;
 }
 
-static int my_SSL_write(SSL *ssl, const void *buf, int num) {
+static int my_SSL_write(void *ssl, const void *buf, int num) {
     return orig_SSL_write(ssl, buf, num);
 }
 
