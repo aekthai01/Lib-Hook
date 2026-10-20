@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <link.h>
 #include <sys/mman.h>
 #include <android/log.h>
 #include <atomic>
@@ -298,32 +299,36 @@ static void *delayed_enable_hooks(void *arg) {
 /* ═══════════════════════════════════════════════════════════
    ENTRY
    ═══════════════════════════════════════════════════════════ */
-static void *lazy_installer(void *) {
-    for (int i = 0; i < 900; ++i) {                 // up to ~180 s
-        FILE *f = fopen("/proc/self/maps", "r");
-        if (f) {
-            char line[512];
-            bool found = false;
-            while (fgets(line, sizeof(line), f)) {
-                if (strstr(line, "libpd267")) { found = true; break; }
-            }
-            fclose(f);
+static int phdr_cb(struct dl_phdr_info *info, size_t, void *data) {
+    if (info->dlpi_name && strstr(info->dlpi_name, "libpd267")) {
+        *(bool *)data = true;
+        return 1;
+    }
+    return 0;
+}
 
-            if (found) {
-                LOGI("[LAZY] libpd267 detected -> installing hooks");
-                void *libc = dlopen("libc.so", RTLD_NOW);
-                if (libc) {
-                    void *p1 = dlsym(libc, "getaddrinfo");
-                    if (p1 && DobbyHook(p1, (void*)my_getaddrinfo,
-                                        (void**)&orig_getaddrinfo) == 0)
-                        LOGI("[LAZY] getaddrinfo hooked");
-                    dlclose(libc);
-                }
-                scan_and_hook();
-                g_hooks_enabled.store(true, std::memory_order_release);
-                LOGI("[LAZY] hooks armed");
-                return nullptr;
+static bool menu_lib_present() {
+    bool found = false;
+    dl_iterate_phdr(phdr_cb, &found);
+    return found;
+}
+
+static void *lazy_installer(void *) {
+    for (int i = 0; i < 900; ++i) {                 // ~180 s
+        if (menu_lib_present()) {
+            LOGI("[LAZY] libpd267 detected -> installing hooks");
+            void *libc = dlopen("libc.so", RTLD_NOW);
+            if (libc) {
+                void *p1 = dlsym(libc, "getaddrinfo");
+                if (p1 && DobbyHook(p1, (void*)my_getaddrinfo,
+                                    (void**)&orig_getaddrinfo) == 0)
+                    LOGI("[LAZY] getaddrinfo hooked");
+                dlclose(libc);
             }
+            scan_and_hook();
+            g_hooks_enabled.store(true, std::memory_order_release);
+            LOGI("[LAZY] hooks armed");
+            return nullptr;
         }
         usleep(200 * 1000);
     }
