@@ -36,6 +36,9 @@
 
 #include "dobby.h"
 #include "Check.h"
+
+static void *curl_hook_thread(void *);
+
 #define TAG "CHU"
 #define LOGI(fmt, ...) __android_log_print(ANDROID_LOG_INFO, TAG, fmt, ##__VA_ARGS__)
 #define LOGW(fmt, ...) __android_log_print(ANDROID_LOG_WARN, TAG, fmt, ##__VA_ARGS__)
@@ -373,7 +376,6 @@ static void *curl_hook_thread(void *) {
     return nullptr;
 }
 
-static void *curl_hook_thread(void *);
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_vm = vm;
