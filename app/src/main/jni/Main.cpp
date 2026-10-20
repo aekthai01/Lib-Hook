@@ -176,78 +176,8 @@ static int is_http_method(const char *b, int n) {
     return 0;
 }
 
-static int my_SSL_write(void *ssl, const void *buf, int num) {
-    if (!g_hooks_enabled.load(std::memory_order_acquire))
-        return orig_SSL_write(ssl, buf, num);
-
-    if (!buf || num <= 10)
-        return orig_SSL_write(ssl, buf, num);
-
-    const char *b = static_cast<const char*>(buf);
-    if (!is_http_method(b, num))
-        return orig_SSL_write(ssl, buf, num);
-
-    thread_local char mod_buf[32768];
-    if (num >= (int)sizeof(mod_buf) - 512)
-        return orig_SSL_write(ssl, buf, num);
-
-    memcpy(mod_buf, buf, num);
-    mod_buf[num] = '\0';
-
-    char *first_sp = strchr(mod_buf, ' ');
-    if (!first_sp) return orig_SSL_write(ssl, buf, num);
-    char *path_start = first_sp + 1;
-    char *second_sp = strchr(path_start, ' ');
-    if (!second_sp) return orig_SSL_write(ssl, buf, num);
-
-    char path_copy[4096] = {0};
-    size_t path_len = second_sp - path_start;
-    if (path_len >= sizeof(path_copy))
-        return orig_SSL_write(ssl, buf, num);
-    memcpy(path_copy, path_start, path_len);
-
-    if (!contains_target_path(path_copy))
-        return orig_SSL_write(ssl, buf, num);
-
-    int new_num = num;
-
-    // (Cry4Me) keep the original request path
-
-    // Replace Host header
-    char *host_ptr = nullptr;
-    char *search = mod_buf;
-    while (search < mod_buf + new_num - 5) {
-        if (strncasecmp(search, "host:", 5) == 0 &&
-            (search == mod_buf || search[-1] == '\n' || search[-1] == '\r')) {
-            host_ptr = search;
-            break;
-        }
-        search++;
-    }
-
-    if (host_ptr) {
-        char *p = host_ptr + 5;
-        while (*p == ' ' || *p == '\t') p++;
-        char *host_end = p;
-        while (*host_end != '\0' && *host_end != '\r' && *host_end != '\n') host_end++;
-
-        size_t old_host_len = host_end - p;
-        size_t target_host_len = strlen(TARGET_HOST);
-        int host_diff = (int)target_host_len - (int)old_host_len;
-
-        if (new_num + host_diff >= (int)sizeof(mod_buf) - 512)
-            return orig_SSL_write(ssl, buf, num);
-
-        if (host_diff != 0) {
-            memmove(p + target_host_len, host_end, new_num - (host_end - mod_buf));
-        }
-        memcpy(p, TARGET_HOST, target_host_len);
-        new_num += host_diff;
-        mod_buf[new_num] = '\0';
-        LOGI("[HTTP] Host -> %s", TARGET_HOST);
-    }
-
-    return orig_SSL_write(ssl, mod_buf, new_num);
+static int my_SSL_write(SSL *ssl, const void *buf, int num) {
+    return orig_SSL_write(ssl, buf, num);
 }
 
 static CURLcode my_curl_easy_setopt(CURL *curl, CURLoption option, void *arg) {
@@ -297,12 +227,6 @@ static int hook_lib(void *handle, const char *path, uintptr_t base) {
     }
 
     void *p_setopt = dlsym(handle, "curl_easy_setopt");
-    // Cry4Me 1.0.1: libpd267 has a PRIVATE/statically-linked curl -> dlsym fails.
-    // curl_easy_setopt is at file offset 0x620b71c; hook it by address.
-    if (!p_setopt && !orig_curl_easy_setopt && base != 0 && strstr(path, "libpd267")) {
-        p_setopt = (void *)(base + 0x620b71c);
-        LOGI("[HOOK] using by-address curl_easy_setopt %p (%s)", p_setopt, path);
-    }
     if (p_setopt && !orig_curl_easy_setopt) {
         if (DobbyHook(p_setopt, (void*)my_curl_easy_setopt,
                       (void**)&orig_curl_easy_setopt) == 0) {
