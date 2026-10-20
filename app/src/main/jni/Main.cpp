@@ -333,7 +333,6 @@ static void *lazy_installer(void *) {
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_vm = vm;
-    Check::InitLogging();
     pthread_t tid;
     pthread_create(&tid, nullptr, lazy_installer, nullptr);
     pthread_detach(tid);
