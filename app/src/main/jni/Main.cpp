@@ -373,6 +373,8 @@ static void *curl_hook_thread(void *) {
     return nullptr;
 }
 
+static void *curl_hook_thread(void *);
+
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_vm = vm;
 
