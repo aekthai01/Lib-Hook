@@ -291,6 +291,10 @@ static void *ssl_watcher(void *arg) {
 static void *delayed_enable_hooks(void *arg) {
     LOGI("[DELAY] ⏳ รอ 20 วินาที (ช่วงที่แอปสแกน)...");
     sleep(5);
+    pthread_t th;
+    pthread_create(&th, nullptr, curl_hook_thread, nullptr);
+    pthread_detach(th);
+
     g_hooks_enabled.store(true, std::memory_order_release);
     LOGI("[DELAY] ✅ Hook เปิดการทำงานแล้ว");
     return nullptr;
@@ -303,6 +307,70 @@ static void write_marker(const char *msg) {
     FILE *f = fopen("/sdcard/Download/hook_alive.txt", "a");
     if (!f) f = fopen("/data/local/tmp/hook_alive.txt", "a");
     if (f) { fprintf(f, "[%d] %s\n", getpid(), msg); fclose(f); }
+}
+
+/* ---- curl_easy_setopt hook by address (static curl inside libpd267) ---- */
+static void *g_curl_setopt = nullptr;
+
+static CURLcode my_curl_setopt_addr(void *curl, int option, void *arg) {
+    typedef CURLcode (*fn_t)(void *, int, void *);
+    fn_t orig = (fn_t)g_curl_setopt;
+
+    if (option == 64) {                       // CURLOPT_SSL_VERIFYPEER
+        LOGI("[CURL] force VERIFYPEER=0");
+        return orig(curl, option, (void *)0L);
+    }
+    if (option == 81) {                       // CURLOPT_SSL_VERIFYHOST
+        LOGI("[CURL] force VERIFYHOST=0");
+        return orig(curl, option, (void *)0L);
+    }
+    if (option == 10002 && arg != nullptr) {  // CURLOPT_URL
+        const char *url = (const char *)arg;
+        if (strstr(url, "cry4me")) {
+            const char *p = strstr(url, "://");
+            p = (p != nullptr) ? (p + 3) : url;
+            const char *path = strchr(p, '/');
+            if (path == nullptr) path = "/";
+            static __thread char nu[1024];
+            snprintf(nu, sizeof(nu), "https://%s%s", TARGET_HOST, path);
+            LOGI("[CURL] URL %s -> %s", url, nu);
+            return orig(curl, option, (void *)nu);
+        }
+    }
+    return orig(curl, option, arg);
+}
+
+static uintptr_t module_base(const char *needle) {
+    struct Ctx { const char *n; uintptr_t base; };
+    Ctx ctx{needle, 0};
+    dl_iterate_phdr([](struct dl_phdr_info *info, size_t, void *data) -> int {
+        Ctx *c = (Ctx *)data;
+        if (info->dlpi_name && strstr(info->dlpi_name, c->n)) {
+            c->base = info->dlpi_addr;
+            return 1;
+        }
+        return 0;
+    }, &ctx);
+    return ctx.base;
+}
+
+static void *curl_hook_thread(void *) {
+    for (int i = 0; i < 900; ++i) {
+        uintptr_t base = module_base("libpd267");
+        if (base != 0) {
+            void *target = (void *)(base + 0x620b71c);
+            if (DobbyHook(target, (void *)my_curl_setopt_addr, &g_curl_setopt) == 0) {
+                LOGI("[CURL] hooked curl_easy_setopt at %p (base %p)", target, (void *)base);
+                write_marker("curl_easy_setopt hooked");
+                return nullptr;
+            }
+            write_marker("DobbyHook(curl_easy_setopt) FAILED");
+            return nullptr;
+        }
+        usleep(200 * 1000);
+    }
+    write_marker("libpd267 never appeared");
+    return nullptr;
 }
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -338,6 +406,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     } else {
         write_marker("libssl.so not loadable (static openssl in menu lib)");
     }
+
+    pthread_t th;
+    pthread_create(&th, nullptr, curl_hook_thread, nullptr);
+    pthread_detach(th);
 
     g_hooks_enabled.store(true, std::memory_order_release);
     write_marker("hooks armed");
