@@ -1,0 +1,27 @@
+{
+  "target_host": "zxx.alwaysdata.net",
+  "target_SPKI_DER_sha256": "d300abbcd9374cc4beee968e05a13e5ab686e9aaca01b56e8a9e1ae2684bb5b5",
+  "source_public_key_hashes": [
+    "12680405c51f2d14ce96b457381b6e0335cbcf0a2d33341a75e1cb311cbf1f4f",
+    "134420f21a14d4e7da385ff42c6b2ce718ed05d6882305d2d0fb5bb2d9845c61"
+  ],
+  "native_input_sha256": "1980f496f15c39c5e0668f1424038028e2dde8f7d15ea604eb5adaf1ba3c4eaf",
+  "slots": [
+    {
+      "va": "0x676e620",
+      "bytes": 40,
+      "original": "https://panel.cry4me.best"
+    },
+    {
+      "va": "0x676e648",
+      "bytes": 32,
+      "original": "https://ru.cry4me.best"
+    },
+    {
+      "va": "0x676e668",
+      "bytes": 32,
+      "original": "https://eu.cry4me.best"
+    }
+  ],
+  "contains_private_material": false
+}
