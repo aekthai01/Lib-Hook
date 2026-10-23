@@ -18,7 +18,7 @@ static int thread_error;
 static void*worker(void*x){(void)x;for(int n=0;n<100;n++){char b[600];size_t k;const unsigned char*p=source_key(n%6,&k);memcpy(b,p,k+1);fixture_len(b);const unsigned char*q=target_key(n%6,&k);if(memcmp(b,q,k+1))__atomic_add_fetch(&thread_error,1,__ATOMIC_RELAXED);}return NULL;}
 int main(int argc,char**argv){
  if(argc!=3){fprintf(stderr,"usage: test_hook libosp.so libosp_fixture.so\n");return 2;}
- void*lib=dlopen(argv[1],RTLD_NOW|RTLD_GLOBAL);if(!lib){fprintf(stderr,"dlopen hook: %s\n",dlerror());return 2;}
+ void*lib=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);if(!lib){fprintf(stderr,"dlopen hook: %s\n",dlerror());return 2;}
  void*fix=dlopen(argv[2],RTLD_NOW|RTLD_LOCAL);if(!fix){fprintf(stderr,"dlopen fixture: %s\n",dlerror());return 2;}
  transform=dlsym(lib,"osp_transform");fixture_len=dlsym(fix,"fixture_strlen");fixture_chr=dlsym(fix,"fixture_strchr");fixture_str=dlsym(fix,"fixture_strstr");source_key=dlsym(fix,"fixture_source_key");target_key=dlsym(fix,"fixture_target_key");
  const char*(*maphost)(const char*)=dlsym(lib,"osp_map_host");void(*stats)(unsigned long*,size_t)=dlsym(lib,"osp_stats");void*(*which)(void)=dlsym(fix,"fixture_strlen_symbol");
