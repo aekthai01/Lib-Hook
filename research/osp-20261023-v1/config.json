@@ -6,22 +6,7 @@
     "134420f21a14d4e7da385ff42c6b2ce718ed05d6882305d2d0fb5bb2d9845c61"
   ],
   "native_input_sha256": "1980f496f15c39c5e0668f1424038028e2dde8f7d15ea604eb5adaf1ba3c4eaf",
-  "slots": [
-    {
-      "va": "0x676e620",
-      "bytes": 40,
-      "original": "https://panel.cry4me.best"
-    },
-    {
-      "va": "0x676e648",
-      "bytes": 32,
-      "original": "https://ru.cry4me.best"
-    },
-    {
-      "va": "0x676e668",
-      "bytes": 32,
-      "original": "https://eu.cry4me.best"
-    }
-  ],
+  "native_offsets_used": false,
+  "automatic_string_growth": false,
   "contains_private_material": false
 }

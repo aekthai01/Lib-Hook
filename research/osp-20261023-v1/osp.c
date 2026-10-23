@@ -63,16 +63,10 @@ int osp_transform(char*p,size_t cap){
  }
  done:pthread_mutex_unlock(&edit_lock);return changed;
 }
-/* Automatic growth is restricted to verified 1.0.11 data slots, never to the
- * remainder of a heap mapping. Arbitrary writable strings use n+1 capacity. */
-static size_t known_capacity(const char*p,size_t n){
- Dl_info i;if(dladdr(p,&i)&&i.dli_fname){const char*s=i.dli_fname,*b=s;for(;*s;s++)if(*s=='/')b=s+1;
-  if(same(b,OSP_MAIN_NAME)){
-   uintptr_t rel=(uintptr_t)p-(uintptr_t)i.dli_fbase;
-   for(size_t k=0;k<sizeof(url_slots)/sizeof(url_slots[0]);k++)if(rel==url_slots[k].begin)return url_slots[k].size;
-  }
- }return n+1;
-}
+/* Never infer allocation capacity from ELF slot spacing or a writable page.
+ * Automatic interception permits equal-size/shrinking edits only. Growth needs
+ * explicit ownership/capacity via osp_transform. No fixed native offsets used. */
+static size_t known_capacity(const char*p,size_t n){(void)p;return n+1;}
 static void attempt(const char*p,size_t n){
  if(!n||n>8191)return;
  /* Do not parse maps for every unrelated string. */

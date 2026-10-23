@@ -20,10 +20,4 @@ static const struct key_rule key_rules[] = {
 {src_key_1_1,dst_key_1,398},
 {src_key_1_2,dst_key_2,451},
 };
-struct slot_rule { uintptr_t begin; size_t size; };
-static const struct slot_rule url_slots[] = {
-{0x676e620,40},
-{0x676e648,32},
-{0x676e668,32},
-};
 #endif
